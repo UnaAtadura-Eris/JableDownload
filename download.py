@@ -13,6 +13,50 @@ from cover import getCover
 from args import *
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
+import subprocess
+import glob
+def embedCover(folder_path, file_name):
+    """把封面图嵌入 MP4 作为封面缩略图，替换原文件"""      
+    # 找封面图（支持 jpg/png/webp）
+    cover_path = None
+    for ext in ('*.jpg', '*.jpeg', '*.png', '*.webp'):
+        matches = glob.glob(os.path.join(folder_path, ext))
+        if matches:
+            cover_path = matches[0]
+            break
+    
+    if not cover_path:
+        print('⚠️ 找不到封面图，跳过嵌入')
+        return
+
+    src = os.path.join(folder_path, f'{file_name}.mp4')
+    tmp = os.path.join(folder_path, f'{file_name}_tmp.mp4')
+
+    cmd = [
+        'ffmpeg', '-y',
+        '-i', src,
+        '-i', cover_path,
+        '-map', '0',
+        '-map', '1',
+        '-c', 'copy',
+        '-c:v:1', 'mjpeg',        # 封面流编码为 mjpeg
+        '-disposition:v:1', 'attached_pic',  # 标记为封面
+        '-movflags', '+faststart',
+        tmp
+    ]
+
+    result = subprocess.run(cmd, capture_output=True, text=True)
+
+    if result.returncode == 0:
+        os.replace(tmp, src)       # 用新文件替换原文件
+        os.remove(cover_path)      # 删除封面图
+        print('✅ 封面嵌入成功，封面图已删除')
+    else:
+        if os.path.exists(tmp):
+            os.remove(tmp)
+        print('❌ 封面嵌入失败')
+        print(result.stderr)
+
 
 def download(url):
 
@@ -99,6 +143,11 @@ def download(url):
 
     # 取得封面
     getCover(html_file=dr.page_source, folder_path=folderPath)
+
+    # 嵌入封面并删除原封面图         ← 新增
+    embedCover(folderPath, dirName)
+
+
 
 
 
